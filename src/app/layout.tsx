@@ -1,3 +1,4 @@
+import "./globals.css";
 import Provider from "@/providers/SessionProvider";
 
 export default function RootLayout({
