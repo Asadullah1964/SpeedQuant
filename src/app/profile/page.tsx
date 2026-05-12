@@ -25,8 +25,8 @@ export default function ProfilePage() {
       try {
         setLoadingAttempts(true);
         const res = await fetch(
-          `/api/attempts?email=${session?.user?.email}`
-        );
+  `/api/attempts?email=${session?.user?.email}`
+);
         const data = await res.json();
         setAttempts(data.attempts || []);
       } catch (error) {
