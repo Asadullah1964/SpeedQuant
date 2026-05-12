@@ -24,7 +24,9 @@ export default function ProfilePage() {
     async function fetchAttempts() {
       try {
         setLoadingAttempts(true);
-        const res = await fetch(`/api/attempts?email=${session.user.email}`);
+        const res = await fetch(
+          `/api/attempts?email=${session?.user?.email}`
+        );
         const data = await res.json();
         setAttempts(data.attempts || []);
       } catch (error) {
@@ -59,10 +61,10 @@ export default function ProfilePage() {
     const bestScore =
       attempts.length > 0
         ? Math.max(
-            ...attempts.map(
-              (attempt) => (attempt.score / attempt.totalQuestions) * 100
-            )
-          ).toFixed(1)
+          ...attempts.map(
+            (attempt) => (attempt.score / attempt.totalQuestions) * 100
+          )
+        ).toFixed(1)
         : "0.0";
 
     const latestAttempt = attempts[0];
