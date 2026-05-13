@@ -30,7 +30,7 @@ export default function Navbar() {
           </div>
 
           <div className="leading-tight">
-            <h1 className="text-lg font-bold tracking-tight sm:text-xl">
+            <h1 className="text-lg font-bold tracking-tight sm:text-xl" style={{color:"Black"}}>
               SpeedQuant
             </h1>
             <p className="hidden text-sm text-slate-500 sm:block">

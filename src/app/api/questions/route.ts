@@ -16,9 +16,10 @@ export async function GET(
   req: NextRequest
 ) {
   try {
+
     await connectDB();
 
-    // Get logged-in user
+    // Logged in user
     const session =
       await getServerSession(
         authOptions
@@ -27,23 +28,44 @@ export async function GET(
     const userEmail =
       session?.user?.email;
 
+    // Query params
     const category =
       req.nextUrl.searchParams.get(
         "category"
       );
+
+    const topic =
+      req.nextUrl.searchParams.get(
+        "topic"
+      );
+
+    // Difficulty from frontend
+    const requestedDifficulty =
+      req.nextUrl.searchParams.get(
+        "difficulty"
+      );
+
+    const mode =
+      req.nextUrl.searchParams.get(
+        "mode"
+      ) || "practice";
 
     const limit =
       Number(
         req.nextUrl.searchParams.get(
           "limit"
         )
-      ) || 10;
+      ) || Infinity;
 
-    // Default difficulty
-    let difficulty = "easy";
+    // Default adaptive difficulty
+    let adaptiveDifficulty =
+      "easy";
 
-    // Adaptive difficulty logic
-    if (userEmail && category) {
+    // Adaptive difficulty system
+    if (
+      userEmail &&
+      category
+    ) {
 
       const attempts =
         await Attempt.find({
@@ -51,17 +73,23 @@ export async function GET(
           category,
         });
 
-      if (attempts.length > 0) {
+      if (
+        attempts.length > 0
+      ) {
 
         const totalAccuracy =
           attempts.reduce(
-            (acc, attempt) => {
+            (
+              acc,
+              attempt
+            ) => {
 
               return (
                 acc +
-                (attempt.score /
-                  attempt.totalQuestions) *
-                100
+                (
+                  attempt.score /
+                  attempt.totalQuestions
+                ) * 100
               );
 
             },
@@ -72,22 +100,32 @@ export async function GET(
           totalAccuracy /
           attempts.length;
 
-        // Difficulty selection
-        if (avgAccuracy >= 75) {
+        if (
+          avgAccuracy >= 75
+        ) {
 
-          difficulty = "hard";
+          adaptiveDifficulty =
+            "hard";
 
         } else if (
           avgAccuracy >= 40
         ) {
 
-          difficulty = "medium";
+          adaptiveDifficulty =
+            "medium";
         }
       }
     }
 
-    // Exclude correctly solved questions
-    let excludedIds: any[] = [];
+    // Priority:
+    // frontend difficulty > adaptive difficulty
+    const finalDifficulty =
+      requestedDifficulty ||
+      adaptiveDifficulty;
+
+    // Exclude solved questions
+    let excludedIds: any[] =
+      [];
 
     if (userEmail) {
 
@@ -103,62 +141,62 @@ export async function GET(
         );
     }
 
-    let questions;
+    // Dynamic MongoDB filter
+    const filter: any = {
 
-    // Fetch questions
+      _id: {
+        $nin: excludedIds,
+      },
+    };
+
+    // Category filter
     if (category) {
 
-      questions =
-        await Question.aggregate([
-          {
-            $match: {
-
-              category:
-                category.toLowerCase(),
-
-              difficulty,
-
-              _id: {
-                $nin: excludedIds,
-              },
-            },
-          },
-
-          {
-            $sample: {
-              size: limit,
-            },
-          },
-        ]);
-
-    } else {
-
-      questions =
-        await Question.aggregate([
-          {
-            $match: {
-
-              difficulty,
-
-              _id: {
-                $nin: excludedIds,
-              },
-            },
-          },
-
-          {
-            $sample: {
-              size: limit,
-            },
-          },
-        ]);
+      filter.category =
+        category.toLowerCase();
     }
+
+    // Topic filter
+    if (topic) {
+
+      filter.topic =
+        topic.toLowerCase();
+    }
+
+    // IMPORTANT FIX
+    // Only apply difficulty filter
+    // if difficulty is NOT "all"
+    if (
+      finalDifficulty &&
+      finalDifficulty !== "all"
+    ) {
+
+      filter.difficulty =
+        finalDifficulty.toLowerCase();
+    }
+
+    console.log(filter);
+
+    // Fetch questions
+    const questions =
+      await Question.aggregate([
+        {
+          $match: filter,
+        },
+
+        {
+          $sample: {
+            size: limit,
+          },
+        },
+      ]);
 
     return NextResponse.json({
       success: true,
 
-      adaptiveDifficulty:
-        difficulty,
+      adaptiveDifficulty,
+
+      finalDifficulty,
 
       questions,
     });
@@ -167,10 +205,15 @@ export async function GET(
 
     console.log(error);
 
-    return NextResponse.json({
-      success: false,
-      message:
-        "Error fetching questions",
-    });
+    return NextResponse.json(
+      {
+        success: false,
+        message:
+          "Error fetching questions",
+      },
+      {
+        status: 500,
+      }
+    );
   }
 }
