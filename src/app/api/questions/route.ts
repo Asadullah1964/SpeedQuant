@@ -39,23 +39,17 @@ export async function GET(
         "topic"
       );
 
-    // Difficulty from frontend
     const requestedDifficulty =
       req.nextUrl.searchParams.get(
         "difficulty"
       );
-
-    const mode =
-      req.nextUrl.searchParams.get(
-        "mode"
-      ) || "practice";
 
     const limit =
       Number(
         req.nextUrl.searchParams.get(
           "limit"
         )
-      ) || Infinity;
+      ) || 10;
 
     // Default adaptive difficulty
     let adaptiveDifficulty =
@@ -117,8 +111,7 @@ export async function GET(
       }
     }
 
-    // Priority:
-    // frontend difficulty > adaptive difficulty
+    // Final difficulty
     const finalDifficulty =
       requestedDifficulty ||
       adaptiveDifficulty;
@@ -141,8 +134,8 @@ export async function GET(
         );
     }
 
-    // Dynamic MongoDB filter
-    const filter: any = {
+    // Base filter
+    const baseFilter: any = {
 
       _id: {
         $nin: excludedIds,
@@ -152,44 +145,166 @@ export async function GET(
     // Category filter
     if (category) {
 
-      filter.category =
+      baseFilter.category =
         category.toLowerCase();
     }
 
     // Topic filter
     if (topic) {
 
-      filter.topic =
+      baseFilter.topic =
         topic.toLowerCase();
     }
 
-    // IMPORTANT FIX
-    // Only apply difficulty filter
-    // if difficulty is NOT "all"
+    // Parse difficulties
+    let difficulties: string[] =
+      [];
+
     if (
       finalDifficulty &&
       finalDifficulty !== "all"
     ) {
 
-      filter.difficulty =
-        finalDifficulty.toLowerCase();
+      difficulties =
+        finalDifficulty
+          .split(",")
+          .map((d) =>
+            d.trim().toLowerCase()
+          )
+          .filter(Boolean);
+
+    } else {
+
+      difficulties = [
+        "easy",
+        "medium",
+        "hard",
+      ];
     }
 
-    console.log(filter);
+    // Distribution logic
+    let distribution: Record<
+      string,
+      number
+    > = {};
 
-    // Fetch questions
-    const questions =
-      await Question.aggregate([
-        {
-          $match: filter,
-        },
+    // easy + medium
+    if (
+      difficulties.includes(
+        "easy"
+      ) &&
+      difficulties.includes(
+        "medium"
+      ) &&
+      difficulties.length === 2
+    ) {
 
-        {
-          $sample: {
-            size: limit,
+      distribution = {
+        easy: 0.4,
+        medium: 0.6,
+      };
+    }
+
+    // medium + hard
+    else if (
+      difficulties.includes(
+        "medium"
+      ) &&
+      difficulties.includes(
+        "hard"
+      ) &&
+      difficulties.length === 2
+    ) {
+
+      distribution = {
+        medium: 0.6,
+        hard: 0.4,
+      };
+    }
+
+    // easy + hard
+    else if (
+      difficulties.includes(
+        "easy"
+      ) &&
+      difficulties.includes(
+        "hard"
+      ) &&
+      difficulties.length === 2
+    ) {
+
+      distribution = {
+        easy: 0.5,
+        hard: 0.5,
+      };
+    }
+
+    // all 3
+    else if (
+      difficulties.length === 3
+    ) {
+
+      distribution = {
+        easy: 0.25,
+        medium: 0.60,
+        hard: 0.15,
+      };
+    }
+
+    // single difficulty
+    else {
+
+      distribution = {
+        [difficulties[0]]: 1,
+      };
+    }
+
+    let questions: any[] = [];
+
+    // Fetch questions based on distribution
+    for (const level in distribution) {
+
+      const percentage =
+        distribution[level];
+
+      let count = Math.round(
+        limit * percentage
+      );
+
+      // Avoid 0 count
+      if (count <= 0) {
+        count = 1;
+      }
+
+      const filter = {
+        ...baseFilter,
+        difficulty: level,
+      };
+
+      const fetched =
+        await Question.aggregate([
+          {
+            $match: filter,
           },
-        },
-      ]);
+
+          {
+            $sample: {
+              size: count,
+            },
+          },
+        ]);
+
+      questions.push(...fetched);
+    }
+
+    // Shuffle final questions
+    questions = questions.sort(
+      () => Math.random() - 0.5
+    );
+
+    // Limit exact count
+    questions =
+      questions.slice(0, limit);
 
     return NextResponse.json({
       success: true,
@@ -197,6 +312,11 @@ export async function GET(
       adaptiveDifficulty,
 
       finalDifficulty,
+
+      distribution,
+
+      totalQuestions:
+        questions.length,
 
       questions,
     });

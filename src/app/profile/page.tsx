@@ -14,7 +14,11 @@ type Attempt = {
 };
 
 export default function ProfilePage() {
+
   const { data: session, status } = useSession();
+
+  const isAdmin =
+    session?.user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
   const [attempts, setAttempts] = useState<Attempt[]>([]);
   const [loadingAttempts, setLoadingAttempts] = useState(true);
 
@@ -25,8 +29,8 @@ export default function ProfilePage() {
       try {
         setLoadingAttempts(true);
         const res = await fetch(
-  `/api/attempts?email=${session?.user?.email}`
-);
+          `/api/attempts?email=${session?.user?.email}`
+        );
         const data = await res.json();
         setAttempts(data.attempts || []);
       } catch (error) {
@@ -139,6 +143,14 @@ export default function ProfilePage() {
                 </p>
               </div>
             </div>
+            {isAdmin && (
+              <Link
+                href="/admin/generate"
+                className="mt-6 inline-flex w-full items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-bold text-slate-900 transition hover:bg-slate-100"
+              >
+                Go to Admin Panel
+              </Link>
+            )}
           </div>
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3 lg:col-span-2">
